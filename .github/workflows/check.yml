@@ -1,0 +1,29 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install lizard for cartographer
+        run: pip install lizard
+      - name: Validate skills
+        run: python scripts/check_skills.py
+      - name: Smoke-test cartographer on this repository
+        run: python skills/cartographer/scripts/cartographer.py survey --top 5
+      - name: Prove the probe example replays deterministically
+        working-directory: skills/probe/scripts
+        run: |
+          python example_shop_probe.py new "$RUNNER_TEMP/ci.probe" catalog default seed 7
+          python example_shop_probe.py do "$RUNNER_TEMP/ci.probe" "add mug 2" "checkout" "add poster" "wait 45" "checkout"
+          python check_replay.py example_shop_probe.py "$RUNNER_TEMP/ci.probe"
