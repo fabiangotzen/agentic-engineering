@@ -11,7 +11,7 @@ An agent that only reads code and runs unit tests cannot see if a change works. 
 
 A **probe** is a small headless tool. With a probe, an agent uses the application as a user does: it acts, looks, and acts again. Each finding comes with an exact reproduction.
 
-Every probe obeys four rules. Together, they go through the real front door of the application and report only what a user can see:
+Every probe obeys four rules. Together, they go through the entry point of the application and report only what a user can see:
 
 - **Every action is user input.** A verb never writes application state. A verb calls what a user action calls: the HTTP endpoint, the command handler, or the UI input layer. When a verb must select a target, the lookup of the application selects it.
 - **The view shows only what the user sees.** If the user cannot see a field, an error or a record, the view does not show it. Feedback on information that the user never gets is wrong feedback.
@@ -25,7 +25,7 @@ A probe cannot show visual layout, animation, accessibility, real-time behaviour
 Use this workflow when the application has no probe.
 
 ```
-- [ ] 1. Find the front door
+- [ ] 1. Find entry points
 - [ ] 2. Make the application deterministic
 - [ ] 3. Write the boot, the view and three verbs
 - [ ] 4. Add events, interrupts and the report
@@ -33,7 +33,7 @@ Use this workflow when the application has no probe.
 - [ ] 6. Document the verbs
 ```
 
-1. Find the front door. Name the entry points that user actions go through. Name the screen or response that the user reads. The probe touches only these. The only exception is the debug command in reference/design.md.
+1. Find the entry point. Name the entry points that user actions go through. Name the screen or response that the user reads. The probe touches only these. The only exception is the debug command in reference/design.md.
 2. Make the application deterministic before you write a verb. Inject the clock. Seed every random generator. Make identifiers sequential. Replace every outside call with a seeded fake.
    If the application is not deterministic, make it deterministic before you continue. The probe found a testability problem.
    Add a replay test. For a probe on the kit, run `check_replay.py`. For other probes, write a test that replays one session two times and compares the output.

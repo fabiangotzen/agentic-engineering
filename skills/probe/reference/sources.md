@@ -15,7 +15,7 @@ When one of these ideas breaks, its source helps you to find the cause.
 - Will Wilson, "Testing Distributed Systems w/ Deterministic Simulation", Strange Loop 2014. FoundationDB ran its full database inside a deterministic simulator with injected faults.
 - The VOPR simulator of TigerBeetle, https://github.com/tigerbeetle/tigerbeetle. It applies the same method to a modern financial database, and uses seeds as bug reports.
 
-## Driving systems through their front door
+## Driving systems through their entry points
 
 - Hypothesis stateful testing (`RuleBasedStateMachine`), https://hypothesis.readthedocs.io. It generates sequences of user-level actions against a model, and shrinks them to a minimal failing sequence. A sweep bot is a much simpler relative.
 - Testcontainers, https://testcontainers.com. It gives tests real dependencies. With it, a probe boots a database or a broker and does not fake its behaviour.
