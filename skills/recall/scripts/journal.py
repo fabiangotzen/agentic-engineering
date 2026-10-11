@@ -81,7 +81,6 @@ def open_items(text: str) -> list[Item]:
 
 def main(argv: list[str]) -> int:
     if isinstance(sys.stdout, io.TextIOWrapper):
-        # Windows consoles default to a legacy code page that cannot print the journal's emoji markers.
         sys.stdout.reconfigure(encoding="utf-8")
     if len(argv) not in (2, 3) or argv[1] != "review":
         print(__doc__)

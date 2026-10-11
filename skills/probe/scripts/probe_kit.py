@@ -25,10 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
-# Hard limit of bot actions in one sweep run, so a bot that never returns None cannot loop forever.
 MAX_SWEEP_ACTIONS = 500
 DEFAULT_SEED = 1
-# Printed when a replay refuses a recorded action; check_replay.py fails on this text.
 REFUSED_ON_REPLAY = "warning: recorded action refused on replay"
 
 VerbMethod = Callable[[Any, list[str]], str]
@@ -43,6 +41,7 @@ def verb(name: str, usage: str = "") -> Callable[[VerbMethod], VerbMethod]:
         method.verb_name = name  # type: ignore[attr-defined]
         method.verb_usage = usage  # type: ignore[attr-defined]
         return method
+
     return mark
 
 

@@ -22,13 +22,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Commands that replay the whole session without adding an action to it.
 REPLAY_COMMANDS = ("look", "log")
-# The line a probe prints when a replay refuses a recorded action; part of the probe contract.
 REFUSED_ON_REPLAY = "warning: recorded action refused on replay"
-# Seconds one replay may take before the check reports it as hung.
 TIMEOUT_SECONDS = 300
-# Number of differing lines shown when two replays do not match.
 DIFF_LINES = 40
 
 

@@ -1,4 +1,5 @@
-Refactor AGENTS.md for progressive disclosure: keep the root short and put task-specific instructions in files loaded when needed.
+Refactor AGENTS.md for progressive disclosure: keep the root short and put task-specific instructions in files loaded
+when needed.
 
 Follow these steps:
 

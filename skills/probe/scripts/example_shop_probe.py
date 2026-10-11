@@ -18,21 +18,14 @@ from dataclasses import dataclass, field
 
 from probe_kit import Harness, Refused, main, verb
 
-# Minutes a cart may sit idle before the shop empties it.
 CART_TTL_MINUTES = 30
-# Share of payments the fake gateway declines.
 DECLINE_RATE = 0.1
-# Prime that offsets the payment generator's seed, so payments and the bot draw different random numbers.
 PAYMENT_SEED_OFFSET = 7919
-# Minutes that one add and one checkout take on the fake clock.
 ADD_MINUTES = 1
 CHECKOUT_MINUTES = 2
-# The sweep bot stops after this many orders or after this many minutes.
 BOT_MAX_ORDERS = 3
 BOT_MAX_MINUTES = 120
-# Chance that the bot checks out a full cart instead of waiting.
 BOT_CHECKOUT_CHANCE = 0.7
-# Range of minutes the bot waits, and range of the quantity it adds.
 BOT_WAIT_MINUTES = (5, 40)
 BOT_QUANTITY = (1, 3)
 
