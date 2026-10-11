@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Cartographer: survey a codebase's terrain, hold the line with ratchets, and score the risk of a change.
+"""Lookout: spot where change and complexity meet, hold the line with ratchets, and score the risk of a change.
 
-    python cartographer.py survey [--days 90] [--top 15] [--json]
-    python cartographer.py ratchet init|check|tighten [--baseline .cartographer/ratchets.json]
-    python cartographer.py risk [--base origin/main] [--markdown]
+    python lookout.py survey [--days 90] [--top 15] [--json]
+    python lookout.py ratchet init|check|tighten [--baseline .lookout/ratchets.json]
+    python lookout.py risk [--base origin/main] [--markdown]
 
 Requires git, Python 3 and the lizard package: pip install lizard
 Language support is whatever lizard reads: Java, Kotlin, C/C++, C#, Go, Python, JavaScript/TypeScript, Rust,
@@ -26,7 +26,7 @@ try:
     import lizard
     from lizard_languages import get_reader_for
 except ImportError:
-    sys.exit("cartographer needs lizard: pip install lizard")
+    sys.exit("lookout needs lizard: pip install lizard")
 
 # Cyclomatic complexity above which a function counts as a warning.
 CCN_WARN = 15
@@ -76,7 +76,7 @@ def git(*args: str, check: bool = False) -> str:
 def repo_root() -> Path:
     root = git("rev-parse", "--show-toplevel").strip()
     if not root:
-        sys.exit("error: not inside a git repository. Run cartographer from a git working tree.")
+        sys.exit("error: not inside a git repository. Run lookout from a git working tree.")
     return Path(root)
 
 
@@ -370,7 +370,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--days", type=int, default=DEFAULT_DAYS, help="churn window in days")
     parser.add_argument("--exclude", action="append", default=list(DEFAULT_EXCLUDES), help="glob to skip, repeatable")
-    parser.add_argument("--baseline", default=".cartographer/ratchets.json")
+    parser.add_argument("--baseline", default=".lookout/ratchets.json")
     commands = parser.add_subparsers(dest="command", required=True)
 
     survey_parser = commands.add_parser("survey", help="hotspots and totals for the current tree")

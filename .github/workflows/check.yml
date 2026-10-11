@@ -15,12 +15,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install lizard for cartographer
+      - name: Install lizard for lookout
         run: pip install lizard
       - name: Validate skills
         run: python scripts/check_skills.py
-      - name: Smoke-test cartographer on this repository
-        run: python skills/cartographer/scripts/cartographer.py survey --top 5
+      - name: Smoke-test lookout on this repository
+        run: python skills/lookout/scripts/lookout.py survey --top 5
       - name: Prove the probe example replays deterministically
         working-directory: skills/probe/scripts
         run: |

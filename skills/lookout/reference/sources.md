@@ -1,8 +1,8 @@
 # Sources
 
-This file lists the work that each idea in cartographer comes from.
+This file lists the work that each idea in lookout comes from.
 
-Cartographer borrows every idea that it uses. Read the originals before you tune anything.
+Lookout borrows every idea that it uses. Read the originals before you tune anything.
 
 The hotspot analysis comes from Adam Tornhill. Credit it as his work.
 

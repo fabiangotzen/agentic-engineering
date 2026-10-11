@@ -1,9 +1,9 @@
 ---
-name: cartographer
+name: lookout
 description: Measures where code change and complexity meet, keeps quality ratchets in CI, and gives each pull request a risk score with its factors. Use when the user asks for hotspots, codebase health, a codebase dashboard, quality ratchets, or the risk of a pull request or branch.
 ---
 
-# Cartographer
+# Lookout
 
 ## Purpose
 
@@ -75,12 +75,12 @@ Use this workflow when the user gives a pull request or a branch, or asks how ri
 
 ## Scripts
 
-RUN `scripts/cartographer.py`. It needs git, Python 3 and the `lizard` package. Install the package with `pip install lizard`.
+RUN `scripts/lookout.py`. It needs git, Python 3 and the `lizard` package. Install the package with `pip install lizard`.
 
 | Command | Result |
 | --- | --- |
-| `scripts/cartographer.py survey` | Prints the totals and the top hotspots. Add `--json` to get the same data for a dashboard or another agent. |
-| `ratchet init` | Writes the baseline to `.cartographer/ratchets.json`. Commit this file. |
+| `scripts/lookout.py survey` | Prints the totals and the top hotspots. Add `--json` to get the same data for a dashboard or another agent. |
+| `ratchet init` | Writes the baseline to `.lookout/ratchets.json`. Commit this file. |
 | `ratchet check` | Fails when a ratcheted number got worse. |
 | `ratchet tighten` | Lowers the baseline to the current numbers. Refuses while a ratchet has slipped. |
-| `scripts/cartographer.py risk --base origin/main --markdown` | Prints the score, every factor, the slipped ratchets and the files to review first. The output is ready for a pull request comment. |
+| `scripts/lookout.py risk --base origin/main --markdown` | Prints the score, every factor, the slipped ratchets and the files to review first. The output is ready for a pull request comment. |

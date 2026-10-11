@@ -4,7 +4,7 @@ Use this prompt to restructure an existing skill into a lean `SKILL.md`, on-dema
 `scripts/`, without adding or changing instructions. It runs in three phases and stops after the analysis,
 so you decide every contradiction before anything is written.
 
-Replace `___/SKILLS.md` with the path to the skill's `SKILL.md`. The cartographer and probe skills in this
+Replace `___/SKILLS.md` with the path to the skill's `SKILL.md`. The lookout, probe and recall skills in this
 repository were refactored with it.
 
 ---
