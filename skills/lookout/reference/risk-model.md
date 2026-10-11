@@ -4,7 +4,7 @@ This file describes how a sighting scores one change, and how to tune it.
 
 ## Score
 
-The change is the diff between its merge base and the working tree. The score is a weighted sum of five factors, each squashed to 0..1, times 100. Low is under 30, medium is 30 to 59, high is 60 and over.
+The change is the diff between its merge base and the working tree. The score is a heuristic: a weighted sum of five factors, each squashed to 0..1, times 100. Low is under 30, medium is 30 to 59, high is 60 and over.
 
 | Factor | Weight | Value | Why |
 | --- | --- | --- | --- |
@@ -13,6 +13,8 @@ The change is the diff between its merge base and the working tree. The score is
 | Change size | 0.20 | `log10(1 + changed source lines) / 3`, capped at 1. 1,000 lines saturate it. | Review quality drops sharply after a few hundred lines. |
 | Missing test changes | 0.15 | `1 - test lines / source lines`, floored at 0. Test files are paths that contain `test` or `spec`. | Source changed without matching tests. |
 | Spread | 0.10 | `(top-level areas touched - 1) / 4`, capped at 1. | A change across many areas is hard to understand as a whole. |
+
+The weights and thresholds are not validated predictors of defects. Tune them as described below.
 
 ## Why these choices
 

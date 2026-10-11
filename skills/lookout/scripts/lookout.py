@@ -42,7 +42,7 @@ DEFAULT_EXCLUDES = ["*/node_modules/*", "*/vendor/*", "*/build/*", "*/dist/*", "
 TEST_MARKERS = ("test", "spec")
 # Normalised hotspot score from which a file over CCN_WARN counts as a hotspot file.
 HOTSPOT_FILE_THRESHOLD = 0.25
-# Risk score from which a sighting is high, and from which it is medium.
+# Heuristic risk score from which a sighting is high, and from which it is medium.
 RISK_HIGH = 60
 RISK_MEDIUM = 30
 # Complexity added at which the complexity factor reaches 1.
@@ -207,11 +207,12 @@ def cmd_ratchet(args: argparse.Namespace) -> int:
     files = survey(args.days, args.exclude)
     current = {"totals": summary(files), "worst_ccn_by_file": worst_by_file(files)}
 
-    if args.action == "init" or not baseline_path.exists():
-        if args.action != "init":
-            print(f"No baseline at {args.baseline}; writing one from the current tree.")
+    if args.action == "init":
         write_baseline(baseline_path, current)
         return 0
+    if not baseline_path.exists():
+        print(f"error: no baseline at {args.baseline}. Run 'ratchet init' and commit the file.")
+        return 1
 
     baseline = load_baseline(baseline_path)
     violations = ratchet_violations(baseline, current)

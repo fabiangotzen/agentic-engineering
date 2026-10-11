@@ -46,7 +46,7 @@ checkout
 - Each line after it is one accepted action, exactly as typed.
 - A **refused** action is never written. A refused action is an unknown verb, or a verb that is invalid in this state and spent no time.
 - An action that the application **rejected** is written, for example out of stock or payment declined. The rejection is behaviour, and the replay must reproduce it.
-- If the replay refuses a recorded action, the build changed under the session. Show a warning. Do not fail.
+- If the replay refuses a recorded action, the build changed under the session. Print `warning: recorded action refused on replay`, then continue. `check_replay.py` fails on this line.
 
 The probe has no server process and no snapshots. Persistence comes from determinism. Every session is an exact reproduction that you can attach to a bug.
 

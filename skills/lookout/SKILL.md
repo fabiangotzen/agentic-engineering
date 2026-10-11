@@ -13,23 +13,22 @@ AI agents add change faster than people can read it. The codebase drifts a littl
 - **Ratchets** are quality numbers that only stay level or improve: functions over the critical complexity threshold, long functions, hotspot files, and the worst function in each file already over the threshold.
 - A **sighting** is the risk score of one change. It tells reviewers where to look first.
 
-The lookout measures. It does not judge. A human decides what is wrong.
+Use the numbers to decide where to review first. A human decides what is wrong.
 
 ## Workflow: scan a codebase
 
-Use when the user wants to see the codebase, or the repository has no chart.
-
-```
-- [ ] 1. Run survey
-- [ ] 2. Build the chart
-- [ ] 3. Set the ratchets
-- [ ] 4. Stop
-```
+Use when the user wants hotspots or the health of the codebase.
 
 1. Run `survey`. Describe each top hotspot in the words of the domain, not as a path.
-2. Build the chart. Fit its panels to the architecture rules and size limits of the repository. Use the survey JSON for the current tree. Use the cached measurements of each merge for the direction panel.
-3. Run `ratchet init`. Commit the baseline. Add `ratchet check` to CI, next to the tests.
-4. Stop. Scanning does not change production code.
+2. Stop. Scanning changes no files.
+
+## Workflow: adopt lookout
+
+Use only when the user asks for a chart, ratchets or a CI gate.
+
+1. Build the chart. Fit its panels to the architecture rules and size limits of the repository. `survey --json` gives only the totals and the top hotspots: write the per-file listing, the history over merges and the dependency data yourself.
+2. Run `ratchet init`. Commit the baseline. Add `ratchet check` to CI, next to the tests.
+3. Do not change production code.
 
 ## Workflow: sight a change
 
@@ -65,6 +64,6 @@ RUN `scripts/lookout.py`. It needs git, Python 3 and `pip install lizard`.
 | --- | --- |
 | `survey [--json]` | The totals and the top hotspots. `--json` gives the data for the chart or another agent. |
 | `ratchet init` | Writes the baseline to `.lookout/ratchets.json`. Commit it. |
-| `ratchet check` | Fails when a ratcheted number got worse. |
+| `ratchet check` | Fails when a ratcheted number got worse, or when there is no baseline. |
 | `ratchet tighten` | Lowers the baseline to the current numbers. Refuses while a ratchet has slipped. |
 | `risk --base origin/main --markdown` | The sighting: score, factors, slipped ratchets and files to review first, ready for a pull request comment. |

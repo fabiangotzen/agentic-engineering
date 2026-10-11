@@ -9,6 +9,10 @@ This file describes the chart: the dashboard that the lookout keeps for one code
 - Do not show one composite health score. One number competes with the judgement of the people who know the code, and is worse than no number. Show the measurements side by side and let the trend show the direction.
 - Each file has its size, the cyclomatic complexity of its worst function, and its churn: the commits that touch it in a window, 90 days by default.
 
+## Data
+
+`survey --json` gives the totals and the top hotspots only. Build the rest yourself: every file's measurements, the history over merges, and the module dependencies.
+
 ## Panels
 
 Start with these panels. Remove each panel that does not help.

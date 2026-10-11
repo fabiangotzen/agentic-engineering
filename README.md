@@ -1,6 +1,6 @@
 # agentic
 
-The skills, prompts and checks I use to build software with AI agents.
+The skills, prompts and checks I use to build software with AI agents. Written and maintained by Fabian Gotzen.
 
 I treat agents as a system under test: guardrails reject bad output, feedback loops tell the agent fast when it
 is wrong, and evals show whether a change to the setup actually helped. This repository holds the parts of that

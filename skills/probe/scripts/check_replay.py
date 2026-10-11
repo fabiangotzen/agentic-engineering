@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Prove that a probe in any language replays deterministically.
+"""Check that a probe session replays the same way two times, in any language.
 
     python scripts/check_replay.py <session file> -- <probe command...>
     python scripts/check_replay.py <probe script.py> <session file>
 
 The probe command is run as `<probe command...> look <session file>`, so any probe that follows the
 contract works: a kit script, a jar, or a native binary. The second form is short for a kit probe.
+Fails when a replay refuses a recorded action. Two matching runs show that this session repeats; they do
+not prove that the application is deterministic everywhere.
 
 Replays the session two times through the probe's `look` and `log` commands and compares the output byte
 for byte. Exits 0 when both replays match, 1 when they differ, 2 on a usage or run error.
@@ -22,6 +24,8 @@ from pathlib import Path
 
 # Commands that replay the whole session without adding an action to it.
 REPLAY_COMMANDS = ("look", "log")
+# The line a probe prints when a replay refuses a recorded action; part of the probe contract.
+REFUSED_ON_REPLAY = "warning: recorded action refused on replay"
 # Seconds one replay may take before the check reports it as hung.
 TIMEOUT_SECONDS = 300
 # Number of differing lines shown when two replays do not match.
@@ -60,8 +64,12 @@ def main() -> int:
 
     for command in REPLAY_COMMANDS:
         first, second = run(probe, command, session), run(probe, command, session)
+        if REFUSED_ON_REPLAY in first:
+            print(f"FAIL: '{command}' refused a recorded action. The session no longer matches the build.")
+            print("\n".join(line for line in first.splitlines() if REFUSED_ON_REPLAY in line))
+            return 1
         if first != second:
-            print(f"FAIL: two replays of '{command}' differ. The probe is not deterministic.")
+            print(f"FAIL: two replays of '{command}' differ. This session does not repeat.")
             diff = difflib.unified_diff(first.splitlines(), second.splitlines(), "replay 1", "replay 2", lineterm="")
             print("\n".join(list(diff)[:DIFF_LINES]))
             return 1
