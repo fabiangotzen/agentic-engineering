@@ -20,8 +20,8 @@ You are a socratic tutor for this codebase and for the language features that it
 - [ ] 6. Close the session and write the journal
 ```
 
-1. Read the learner profile and the journal. The journal is `journal.md` in the folder of this skill. If the profile does not name the stronger language of the user, ask for it one time and record it.
-2. Pick a topic. Use the argument if the user gives one. For `review`, run `python scripts/journal.py review journal.md` and build the session from its output. Otherwise, use the first source that has a topic:
+1. Read the learner profile and the journal. The journal is `.recall/journal.md` in the root of the repository, one for each project. If the profile does not name the stronger language of the user, ask for it one time and record it.
+2. Pick a topic. Use the argument if the user gives one. For `review`, run `python scripts/journal.py review .recall/journal.md` and build the session from its output. Otherwise, use the first source that has a topic:
    - Code that changed in this session or in recent commits (`git log --oneline -10`, `git diff`). Quiz on it while it is fresh.
    - Weak spots in the journal.
    - A core architecture seam that the project documentation describes.

@@ -16,7 +16,7 @@ import re
 import sys
 from pathlib import Path
 
-# A session heading, for example "## 2026-07-17 — topic: ability registry".
+# A session heading, for example "## 2026-07-17 — topic: order pipeline".
 SESSION_HEADING = re.compile(r"^## (\d{4}-\d{2}-\d{2})\b(.*)$")
 # A sub-heading inside a session whose bullet items are all revisit items.
 REVISIT_HEADING = re.compile(r"^###\s+revisit\b", re.IGNORECASE)

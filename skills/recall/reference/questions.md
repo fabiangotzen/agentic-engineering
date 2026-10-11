@@ -4,16 +4,16 @@ This file describes how to write the questions of a session, how to make the use
 
 ## Question levels
 
-Mix four levels in each session:
+Mix four levels in each session. Take every name in a question from the real code of the repository.
 
 | Level | Example |
 | --- | --- |
-| Recall | "What does `InstallWorld` bind?" |
-| Comprehension | "Why must renderers use `RenderTime()` instead of `GetTime()`?" |
-| Prediction | "What happens if a unit test touches `WorldMap()` before it installs a world?" |
-| Design | "Why do ally projectiles carry a string `kind` instead of a texture?" |
+| Recall | "What does `configure_routes` register?" |
+| Comprehension | "Why does the handler read the time from an injected `Clock` and not from the system clock?" |
+| Prediction | "What happens if a test calls `OrderService.place` before the repository is set up?" |
+| Design | "Why does an order event carry a product id and not the product object?" |
 
-- Tie each language question to real lines. Use the places where the repository actually uses a feature, for example templates, const-correctness, value and reference parameters, resource lifetimes, or sum types.
+- Tie each language question to real lines. Use the places where the repository actually uses a feature, for example generics or templates, immutability, value and reference semantics, resource lifetimes, error handling, or sum types.
 - Show a real snippet and ask "What does this do?" or "What breaks if we change X?". Reading code is the skill that the session trains.
 - Ask "Why is it designed this way?" more often than "What is it called?".
 
@@ -24,15 +24,16 @@ Reading code and writing code are different skills. In at least 2 of every 5 to 
 - Do not accept a description in words where you asked for code. Say so warmly and ask again for the code.
 - Make the task small and real: one line, one signature, or one blank in a real call.
 
-Examples from a C++ codebase:
+Examples, each in the language of its codebase:
 
-- "Type the line that sets the flame-strike cooldown to its maximum, with `def.cooldown`." (pointer-to-member `.*` syntax)
-- "Write the signature of a function that changes a `GameState` and only reads an `InputFrame`." (`&` and `const &`)
-- "Fill in the blank: `ForEachCooldown(state.cooldowns, ___);` so that it sets every cooldown to zero." (lambda syntax and capture list)
-- "Rewrite `InteractableRef` as a `std::variant` and show the `std::visit` call."
+- C++: "Write the signature of a function that changes an `Order` and only reads a `Config`." (`&` and `const &`)
+- C++: "Fill in the blank: `std::erase_if(orders, ___);` so that it removes every cancelled order." (lambda syntax and capture list)
+- Python: "Write the `@dataclass` for `Refund` so that its fields cannot be reassigned." (`frozen=True`)
+- TypeScript: "Write the type of `Result` so that the compiler forces the caller to handle the error case." (discriminated union)
+- Java: "Rewrite this `if` chain over `Shape` as a `switch` over a sealed interface." (pattern matching)
 
 ## Grade the syntax
 
-Grade the actual syntax, for example a missing `&`, a missing `const`, a wrong capture list, or `.` where `->` belongs. A quiz that only reads code hides these errors.
+Grade the actual syntax, for example a missing `&` or `const`, a wrong capture list, a missing `await`, or a mutable default argument. A quiz that only reads code hides these errors.
 
 When the code is wrong, show the corrected line next to the line of the user. Name the specific rule.

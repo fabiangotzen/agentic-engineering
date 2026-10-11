@@ -6,8 +6,7 @@ When one of these ideas breaks, its source helps you to find the cause.
 
 ## Sessions as action logs
 
-- StarCraft: Brood War replays. A `.rep` file stores the commands of the players, not the game state. The deterministic engine replays the commands into the same match. For the same reason, a probe session holds only a boot line and actions.
-- Martin Fowler, "Event Sourcing" (2005), https://martinfowler.com/eaaDev/EventSourcing.html. State is the result of a replay of a log of changes.
+- Martin Fowler, "Event Sourcing" (2005), https://martinfowler.com/eaaDev/EventSourcing.html. State is the result of a replay of a log of changes. For the same reason, a probe session holds only a boot line and actions.
 - rr, the record-and-replay debugger from Mozilla, https://rr-project.org. It uses deterministic replay as a debugging tool, not as a test.
 
 ## Deterministic simulation
@@ -19,7 +18,3 @@ When one of these ideas breaks, its source helps you to find the cause.
 
 - Hypothesis stateful testing (`RuleBasedStateMachine`), https://hypothesis.readthedocs.io. It generates sequences of user-level actions against a model, and shrinks them to a minimal failing sequence. A sweep bot is a much simpler relative.
 - Testcontainers, https://testcontainers.com. It gives tests real dependencies. With it, a probe boots a database or a broker and does not fake its behaviour.
-
-## Origin of this skill
-
-The probe pattern started in a side project with a large simulation. A text CLI drove the real simulation with real user input. It showed only what the user could see, and stored each session as its action log. The project-specific parts are removed. The rules that made the probe reliable stay.
