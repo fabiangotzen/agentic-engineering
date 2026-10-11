@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""Prove that a probe built on probe_kit replays deterministically.
+"""Prove that a probe in any language replays deterministically.
 
-    python scripts/check_replay.py <probe script> <session file>
+    python scripts/check_replay.py <session file> -- <probe command...>
+    python scripts/check_replay.py <probe script.py> <session file>
+
+The probe command is run as `<probe command...> look <session file>`, so any probe that follows the
+contract works: a kit script, a jar, or a native binary. The second form is short for a kit probe.
 
 Replays the session two times through the probe's `look` and `log` commands and compares the output byte
 for byte. Exits 0 when both replays match, 1 when they differ, 2 on a usage or run error.
@@ -24,10 +28,10 @@ TIMEOUT_SECONDS = 300
 DIFF_LINES = 40
 
 
-def run(probe: Path, command: str, session: Path) -> str:
+def run(probe: list[str], command: str, session: Path) -> str:
     try:
         result = subprocess.run(
-            [sys.executable, str(probe), command, str(session)],
+            [*probe, command, str(session)],
             capture_output=True, text=True, timeout=TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
@@ -38,12 +42,17 @@ def run(probe: Path, command: str, session: Path) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
+    args = sys.argv[1:]
+    if len(args) >= 3 and args[1] == "--":
+        session, probe = Path(args[0]), args[2:]
+    elif len(args) == 2:
+        script, session = Path(args[0]), Path(args[1])
+        if not script.is_file():
+            print(f"error: probe script '{script}' does not exist.")
+            return 2
+        probe = [sys.executable, str(script)]
+    else:
         print(__doc__)
-        return 2
-    probe, session = Path(sys.argv[1]), Path(sys.argv[2])
-    if not probe.is_file():
-        print(f"error: probe script '{probe}' does not exist.")
         return 2
     if not session.is_file():
         print(f"error: session file '{session}' does not exist.")

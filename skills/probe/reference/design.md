@@ -17,6 +17,21 @@ Make verbs user-sized: `checkout`, not `POST /payments` then `PATCH /orders`.
 
 The probe is tooling, not product code. It lives next to the tests and links the application as the tests do.
 
+## The contract
+
+Every probe gives these commands, in any language:
+
+| Command | Effect |
+| --- | --- |
+| `new <session> <boot args...> [seed N]` | Writes the boot line and prints the first view. |
+| `do <session> "<action>" ...` | Replays the session, runs the actions, and appends the accepted ones. Prints events, a summary and the view. |
+| `look <session>` | Replays the session and prints the view. Records nothing. |
+| `log <session>` | Replays the session and prints every event, action by action. |
+| `report <session>` | Replays the session and prints the outcome numbers and the notes. |
+| `sweep <boot args...> runs N` | Optional. The bot plays seeds 1 to N and prints the mean, minimum and maximum. |
+
+Every probe also has the `note` verb, uses the session file format below, replays on every call, and never records a refused action.
+
 ## The session file
 
 ```
@@ -49,7 +64,7 @@ The probe has no server process and no snapshots. Persistence comes from determi
 
 ## Other languages
 
-For a JVM or Node application, port the shape of the kit. Do not start the Python kit once for each action. The session file format and the six commands are the contract, not the language.
+Write the probe in the language of the application. The session file format and the commands in the contract are fixed; the language is not. Do not start the Python kit once for each action of a JVM or Node application. Port the shape of the kit as the porting reference of this skill describes.
 
 ## Writing the view
 
