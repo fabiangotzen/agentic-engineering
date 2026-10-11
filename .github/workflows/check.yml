@@ -21,7 +21,7 @@ jobs:
         run: python scripts/check_skills.py
       - name: Smoke-test lookout on this repository
         run: python skills/lookout/scripts/lookout.py survey --top 5
-      - name: Prove the probe example replays deterministically
+      - name: Check that the probe example replays the same way twice
         working-directory: skills/probe/scripts
         run: |
           python example_shop_probe.py new "$RUNNER_TEMP/ci.probe" catalog default seed 7
