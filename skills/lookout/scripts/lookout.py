@@ -42,7 +42,7 @@ DEFAULT_EXCLUDES = ["*/node_modules/*", "*/vendor/*", "*/build/*", "*/dist/*", "
 TEST_MARKERS = ("test", "spec")
 # Normalised hotspot score from which a file over CCN_WARN counts as a hotspot file.
 HOTSPOT_FILE_THRESHOLD = 0.25
-# Risk score from which a sounding is high, and from which it is medium.
+# Risk score from which a sighting is high, and from which it is medium.
 RISK_HIGH = 60
 RISK_MEDIUM = 30
 # Complexity added at which the complexity factor reaches 1.
