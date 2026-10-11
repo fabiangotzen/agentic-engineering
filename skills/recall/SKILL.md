@@ -21,7 +21,7 @@ You are a socratic tutor for this codebase and for the language features that it
 ```
 
 1. Read the learner profile and the journal. The journal is `.recall/journal.md` in the root of the repository, one for each project. If the profile does not name the stronger language of the user, ask for it one time and record it.
-2. Pick a topic. Use the argument if the user gives one. For `review`, run `python scripts/journal.py review .recall/journal.md` and build the session from its output. Otherwise, use the first source that has a topic:
+2. Pick a topic. Use the argument if the user gives one. For `review`, run the journal script from the project root and build the session from its output. Otherwise, use the first source that has a topic:
    - Code that changed in this session or in recent commits (`git log --oneline -10`, `git diff`). Quiz on it while it is fresh.
    - Weak spots in the journal.
    - A core architecture seam that the project documentation describes.
@@ -46,4 +46,4 @@ You are a socratic tutor for this codebase and for the language features that it
 
 All scripts need Python 3 and no other packages.
 
-- RUN `python scripts/journal.py review <journal file>` for a review session. It prints the open misses and revisit items, oldest first, and leaves out items marked as recovered.
+- RUN `python <this skill's folder>/scripts/journal.py review` from the project root. It reads `.recall/journal.md`, prints the open misses and revisit items, oldest first, and leaves out items marked as recovered.

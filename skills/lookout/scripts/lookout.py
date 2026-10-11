@@ -19,8 +19,10 @@ import math
 import subprocess
 import sys
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any
 
 try:
     import lizard
@@ -51,7 +53,6 @@ COMPLEXITY_SATURATION = 30
 SIZE_LOG_DECADES = 3
 # Extra top-level areas at which the spread factor reaches 1.
 SPREAD_SATURATION = 4
-# Number of files listed under "review these first".
 REVIEW_FIRST_LIMIT = 8
 # Factor weights; they sum to 1. Read reference/risk-model.md before changing them.
 WEIGHTS = {
@@ -61,15 +62,19 @@ WEIGHTS = {
     "missing test changes": 0.15,
     "spread across top-level areas": 0.10,
 }
-# Default churn window in days and default number of hotspots that survey prints.
 DEFAULT_DAYS = 90
 DEFAULT_TOP = 15
+DEFAULT_BASELINE = ".lookout/ratchets.json"
 
 
-def git(*args: str, check: bool = False) -> str:
-    result = subprocess.run(["git", *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if check and result.returncode != 0:
-        sys.exit(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+# --- git ---------------------------------------------------------------------------------------------------
+
+
+def git(*args: str) -> str:
+    """Stdout of a git command, or an empty string when it fails."""
+    result = subprocess.run(
+        ["git", *args], capture_output=True, text=True, encoding="utf-8", errors="replace", check=False
+    )
     return result.stdout if result.returncode == 0 else ""
 
 
@@ -87,26 +92,25 @@ def merge_base_of(base: str) -> str:
     return merge_base
 
 
-def load_baseline(path: Path) -> dict:
-    try:
-        baseline = json.loads(path.read_text())
-        baseline["totals"], baseline["worst_ccn_by_file"]
-    except (OSError, json.JSONDecodeError, KeyError, TypeError) as error:
-        sys.exit(f"error: cannot read the baseline {path}: {error}. Fix the file or run 'ratchet init'.")
-    return baseline
+def source_at(revision: str, path: str) -> str:
+    return git("show", f"{revision}:{path}")
 
 
-def is_excluded(path: str, excludes: list[str]) -> bool:
-    return any(fnmatch.fnmatch("/" + path, pattern) for pattern in excludes)
+def read_source(path: Path) -> str:
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+# --- measuring files ---------------------------------------------------------------------------------------
 
 
 def is_test(path: str) -> bool:
-    lowered = path.lower()
-    return any(marker in part for part in lowered.split("/") for marker in TEST_MARKERS)
+    return any(marker in part for part in path.lower().split("/") for marker in TEST_MARKERS)
 
 
 def analyzable(path: str, excludes: list[str]) -> bool:
-    return get_reader_for(path) is not None and not is_excluded(path, excludes)
+    if get_reader_for(path) is None:
+        return False
+    return not any(fnmatch.fnmatch("/" + path, pattern) for pattern in excludes)
 
 
 @dataclass
@@ -122,6 +126,13 @@ class FileMetrics:
     test: bool = False
     functions: dict[str, int] = field(default_factory=dict)
 
+    def add_function(self, name: str, ccn: int, length: int) -> None:
+        self.functions[name] = ccn
+        self.worst_ccn = max(self.worst_ccn, ccn)
+        self.functions_over_warn += ccn > CCN_WARN
+        self.functions_over_crit += ccn > CCN_CRIT
+        self.long_functions += length > LONG_FUNCTION
+
 
 def measure(path: str, source: str) -> FileMetrics:
     metrics = FileMetrics(path=path, test=is_test(path))
@@ -132,16 +143,11 @@ def measure(path: str, source: str) -> FileMetrics:
         return metrics
     metrics.nloc = info.nloc
     for function in info.function_list:
-        ccn = function.cyclomatic_complexity
-        metrics.functions[function.long_name] = ccn
-        metrics.worst_ccn = max(metrics.worst_ccn, ccn)
-        metrics.functions_over_warn += ccn > CCN_WARN
-        metrics.functions_over_crit += ccn > CCN_CRIT
-        metrics.long_functions += function.length > LONG_FUNCTION
+        metrics.add_function(function.long_name, function.cyclomatic_complexity, function.length)
     return metrics
 
 
-def churn_counts(days: int) -> Counter:
+def churn_counts(days: int) -> Counter[str]:
     log = git("log", f"--since={days}.days", "--no-merges", "--name-only", "--format=")
     return Counter(line for line in log.splitlines() if line.strip())
 
@@ -154,10 +160,9 @@ def survey(days: int, excludes: list[str]) -> list[FileMetrics]:
         if not analyzable(path, excludes):
             continue
         try:
-            source = (root / path).read_text(encoding="utf-8", errors="replace")
+            metrics = measure(path, read_source(root / path))
         except OSError:
             continue
-        metrics = measure(path, source)
         metrics.churn = churn.get(path, 0)
         files.append(metrics)
     score_hotspots(files)
@@ -172,86 +177,96 @@ def score_hotspots(files: list[FileMetrics]) -> None:
         f.hotspot = round((f.churn / max_churn) * (f.worst_ccn / max_ccn), 4)
 
 
+def production(files: list[FileMetrics]) -> list[FileMetrics]:
+    return [f for f in files if not f.test]
+
+
+def top_hotspots(files: list[FileMetrics], count: int) -> list[FileMetrics]:
+    return sorted(production(files), key=lambda f: f.hotspot, reverse=True)[:count]
+
+
+# --- survey ------------------------------------------------------------------------------------------------
+
+
 def summary(files: list[FileMetrics]) -> dict[str, int]:
-    production = [f for f in files if not f.test]
+    kept = production(files)
     return {
-        "functions_over_ccn_warn": sum(f.functions_over_warn for f in production),
-        "functions_over_ccn_crit": sum(f.functions_over_crit for f in production),
-        "long_functions": sum(f.long_functions for f in production),
-        "hotspot_files": sum(f.hotspot >= HOTSPOT_FILE_THRESHOLD and f.worst_ccn > CCN_WARN for f in production),
+        "functions_over_ccn_warn": sum(f.functions_over_warn for f in kept),
+        "functions_over_ccn_crit": sum(f.functions_over_crit for f in kept),
+        "long_functions": sum(f.long_functions for f in kept),
+        "hotspot_files": sum(f.hotspot >= HOTSPOT_FILE_THRESHOLD and f.worst_ccn > CCN_WARN for f in kept),
     }
+
+
+def survey_json(files: list[FileMetrics], hotspots: list[FileMetrics]) -> str:
+    rows = [{key: value for key, value in asdict(f).items() if key != "functions"} for f in hotspots]
+    return json.dumps({"summary": summary(files), "hotspots": rows}, indent=2)
+
+
+def survey_text(files: list[FileMetrics], hotspots: list[FileMetrics], days: int) -> str:
+    lines = [f"Surveyed {len(files)} files, churn over the last {days} days.", ""]
+    lines += [f"  {name:<26} {value}" for name, value in summary(files).items()]
+    lines += ["", f"{'hotspot':>8} {'churn':>6} {'ccn':>5} {'nloc':>6}  path"]
+    lines += [f"{f.hotspot:>8.3f} {f.churn:>6} {f.worst_ccn:>5} {f.nloc:>6}  {f.path}" for f in hotspots]
+    return "\n".join(lines)
 
 
 def cmd_survey(args: argparse.Namespace) -> int:
     files = survey(args.days, args.exclude)
-    hotspots = sorted((f for f in files if not f.test), key=lambda f: f.hotspot, reverse=True)[: args.top]
-    if args.json:
-        payload = {"summary": summary(files), "hotspots": [{k: v for k, v in asdict(f).items() if k != "functions"} for f in hotspots]}
-        print(json.dumps(payload, indent=2))
-        return 0
-    print(f"Surveyed {len(files)} files, churn over the last {args.days} days.\n")
-    for name, value in summary(files).items():
-        print(f"  {name:<26} {value}")
-    print(f"\n{'hotspot':>8} {'churn':>6} {'ccn':>5} {'nloc':>6}  path")
-    for f in hotspots:
-        print(f"{f.hotspot:>8.3f} {f.churn:>6} {f.worst_ccn:>5} {f.nloc:>6}  {f.path}")
+    hotspots = top_hotspots(files, args.top)
+    print(survey_json(files, hotspots) if args.json else survey_text(files, hotspots, args.days))
     return 0
 
 
-def worst_by_file(files: list[FileMetrics]) -> dict[str, int]:
-    return {f.path: f.worst_ccn for f in files if not f.test and f.worst_ccn > CCN_CRIT}
+# --- ratchets ----------------------------------------------------------------------------------------------
 
 
-def cmd_ratchet(args: argparse.Namespace) -> int:
-    baseline_path = repo_root() / args.baseline
-    files = survey(args.days, args.exclude)
-    current = {"totals": summary(files), "worst_ccn_by_file": worst_by_file(files)}
+@dataclass(frozen=True)
+class Snapshot:
+    """The ratcheted numbers: totals, and the worst function of each file over CCN_CRIT."""
 
-    if args.action == "init":
-        write_baseline(baseline_path, current)
-        return 0
-    if not baseline_path.exists():
-        print(f"error: no baseline at {args.baseline}. Run 'ratchet init' and commit the file.")
-        return 1
+    totals: dict[str, int]
+    worst_ccn_by_file: dict[str, int]
 
-    baseline = load_baseline(baseline_path)
-    violations = ratchet_violations(baseline, current)
+    @classmethod
+    def of(cls, files: list[FileMetrics]) -> Snapshot:
+        worst = {f.path: f.worst_ccn for f in production(files) if f.worst_ccn > CCN_CRIT}
+        return cls(summary(files), worst)
 
-    if args.action == "tighten":
-        tightened = {
-            "totals": {k: min(v, baseline["totals"].get(k, v)) for k, v in current["totals"].items()},
-            "worst_ccn_by_file": {
-                path: min(ccn, baseline["worst_ccn_by_file"].get(path, ccn))
-                for path, ccn in current["worst_ccn_by_file"].items()
-            },
+    def tightened(self, baseline: Snapshot) -> Snapshot:
+        totals = {key: min(value, baseline.totals.get(key, value)) for key, value in self.totals.items()}
+        worst = {
+            path: min(ccn, baseline.worst_ccn_by_file.get(path, ccn)) for path, ccn in self.worst_ccn_by_file.items()
         }
-        if violations:
-            print("Not tightening while ratchets are violated:")
-            print_violations(violations)
-            return 1
-        write_baseline(baseline_path, tightened)
-        return 0
+        return Snapshot(totals, worst)
 
-    if violations:
-        print_violations(violations)
-        return 1
-    print("All ratchets hold.")
-    return 0
+    def violations(self, baseline: Snapshot) -> list[str]:
+        found = [
+            f"{key}: {value} (baseline {baseline.totals[key]})"
+            for key, value in self.totals.items()
+            if key in baseline.totals and value > baseline.totals[key]
+        ]
+        for path, ccn in self.worst_ccn_by_file.items():
+            allowed = baseline.worst_ccn_by_file.get(path)
+            if allowed is None:
+                found.append(f"{path}: new function over CCN {CCN_CRIT} (worst {ccn})")
+            elif ccn > allowed:
+                found.append(f"{path}: worst CCN {ccn} (baseline {allowed})")
+        return found
 
 
-def ratchet_violations(baseline: dict, current: dict) -> list[str]:
-    violations = []
-    for key, value in current["totals"].items():
-        allowed = baseline["totals"].get(key)
-        if allowed is not None and value > allowed:
-            violations.append(f"{key}: {value} (baseline {allowed})")
-    for path, ccn in current["worst_ccn_by_file"].items():
-        allowed = baseline["worst_ccn_by_file"].get(path)
-        if allowed is None:
-            violations.append(f"{path}: new function over CCN {CCN_CRIT} (worst {ccn})")
-        elif ccn > allowed:
-            violations.append(f"{path}: worst CCN {ccn} (baseline {allowed})")
-    return violations
+def load_baseline(path: Path) -> Snapshot:
+    try:
+        data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+        return Snapshot(dict(data["totals"]), dict(data["worst_ccn_by_file"]))
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+        sys.exit(f"error: cannot read the baseline {path}: {error}. Fix the file or run 'ratchet init'.")
+
+
+def write_baseline(path: Path, snapshot: Snapshot) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(asdict(snapshot), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"Baseline written to {path}")
 
 
 def print_violations(violations: list[str]) -> None:
@@ -259,119 +274,226 @@ def print_violations(violations: list[str]) -> None:
         print(f"  ratchet slipped: {violation}")
 
 
-def write_baseline(path: Path, data: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
-    print(f"Baseline written to {path}")
+def ratchet_check(path: Path, current: Snapshot) -> int:
+    violations = current.violations(load_baseline(path))
+    if violations:
+        print_violations(violations)
+        return 1
+    print("All ratchets hold.")
+    return 0
 
 
-def changed_files(base: str) -> list[tuple[str, int, int]]:
-    merge_base = merge_base_of(base)
+def ratchet_tighten(path: Path, current: Snapshot) -> int:
+    baseline = load_baseline(path)
+    violations = current.violations(baseline)
+    if violations:
+        print("Not tightening while ratchets are violated:")
+        print_violations(violations)
+        return 1
+    write_baseline(path, current.tightened(baseline))
+    return 0
+
+
+def cmd_ratchet(args: argparse.Namespace) -> int:
+    path = repo_root() / args.baseline
+    current = Snapshot.of(survey(args.days, args.exclude))
+    if args.action == "init":
+        write_baseline(path, current)
+        return 0
+    if not path.exists():
+        print(f"error: no baseline at {args.baseline}. Run 'ratchet init' and commit the file.")
+        return 1
+    return ratchet_tighten(path, current) if args.action == "tighten" else ratchet_check(path, current)
+
+
+# --- risk --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TouchedFile:
+    path: str
+    lines: int
+    exposure: float
+    complexity_added: int
+    worst_ccn: int
+
+
+@dataclass
+class Change:
+    source_lines: int = 0
+    test_lines: int = 0
+    areas: set[str] = field(default_factory=set)
+    touched: list[TouchedFile] = field(default_factory=list)
+
+    @property
+    def complexity_added(self) -> int:
+        return sum(t.complexity_added for t in self.touched)
+
+    @property
+    def worst_exposure(self) -> float:
+        return max((t.exposure for t in self.touched), default=0.0)
+
+
+@dataclass(frozen=True)
+class Factor:
+    name: str
+    weight: float
+    value: float
+
+
+def changed_files(merge_base: str) -> list[tuple[str, int, int]]:
     changes = []
     for line in git("diff", "--numstat", "--no-renames", merge_base).splitlines():
         try:
             added, deleted, path = line.split("\t", 2)
-            if added == "-":
-                continue
-            changes.append((path, int(added), int(deleted)))
+            if added != "-":
+                changes.append((path, int(added), int(deleted)))
         except ValueError:
             print(f"warning: skipped an unreadable diff line: {line!r}", file=sys.stderr)
     return changes
 
 
-def source_at(revision: str, path: str) -> str | None:
-    result = subprocess.run(["git", "show", f"{revision}:{path}"], capture_output=True, text=True, errors="replace")
-    return result.stdout if result.returncode == 0 else None
+def complexity_added(before: FileMetrics, after: FileMetrics) -> int:
+    # Complexity only counts above CCN_NOTABLE, so a dozen new one-line functions don't read as risk.
+    return sum(
+        max(0, ccn - max(before.functions.get(name, 0), CCN_NOTABLE)) for name, ccn in after.functions.items()
+    )
+
+
+@dataclass(frozen=True)
+class RiskContext:
+    root: Path
+    merge_base: str
+    files: dict[str, FileMetrics]
+    top_hotspot: float
+
+    def touch(self, path: str, lines: int) -> TouchedFile:
+        before = measure(path, source_at(self.merge_base, path))
+        current = self.root / path
+        after = measure(path, read_source(current)) if current.exists() else FileMetrics(path)
+        exposure = self.files[path].hotspot / self.top_hotspot if path in self.files else 0.0
+        return TouchedFile(path, lines, exposure, complexity_added(before, after), after.worst_ccn)
+
+
+def measure_change(context: RiskContext, excludes: list[str]) -> Change:
+    change = Change()
+    for path, added, deleted in changed_files(context.merge_base):
+        if not analyzable(path, excludes):
+            continue
+        change.areas.add(path.split("/")[0])
+        if is_test(path):
+            change.test_lines += added + deleted
+        else:
+            change.source_lines += added + deleted
+            change.touched.append(context.touch(path, added + deleted))
+    return change
+
+
+def risk_factors(change: Change) -> list[Factor]:
+    # Each factor is squashed to 0..1. See reference/risk-model.md before changing them.
+    source, areas = change.source_lines, len(change.areas)
+    values = {
+        "change size": min(1.0, math.log10(1 + source) / SIZE_LOG_DECADES),
+        "hotspot exposure": min(1.0, change.worst_exposure),
+        "complexity added": min(1.0, change.complexity_added / COMPLEXITY_SATURATION),
+        "missing test changes": max(0.0, 1 - change.test_lines / source) if source else 0.0,
+        "spread across top-level areas": min(1.0, (areas - 1) / SPREAD_SATURATION) if areas else 0.0,
+    }
+    return [Factor(name, WEIGHTS[name], value) for name, value in values.items()]
+
+
+def risk_level(score: int) -> str:
+    if score >= RISK_HIGH:
+        return "high"
+    return "medium" if score >= RISK_MEDIUM else "low"
+
+
+@dataclass(frozen=True)
+class RiskReport:
+    factors: list[Factor]
+    touched: list[TouchedFile]
+    slipped: list[str]
+
+    @property
+    def score(self) -> int:
+        return round(sum(f.weight * f.value for f in self.factors) * 100)
+
+    def review_first(self) -> list[TouchedFile]:
+        ranked = sorted(self.touched, key=lambda t: (t.exposure, t.complexity_added), reverse=True)
+        return ranked[:REVIEW_FIRST_LIMIT]
+
+
+@dataclass(frozen=True)
+class Style:
+    title: str
+    factor_header: list[str]
+    factor_row: str
+    slipped: str
+    review: str
+    footer: str
+
+
+TEXT = Style(
+    title="Change risk: {score}/100 ({level})",
+    factor_header=["factors:"],
+    factor_row="  {name:<32} weight {weight:.2f}  value {value:.2f}",
+    slipped="ratchets slipped:",
+    review="review these first:",
+    footer="(triage aid, not a gate)",
+)
+MARKDOWN = Style(
+    title="## Change risk: {score}/100 ({level})",
+    factor_header=["| factor | weight | value |", "| --- | --- | --- |"],
+    factor_row="| {name} | {weight:.2f} | {value:.2f} |",
+    slipped="**Ratchets slipped**",
+    review="**Review these first**",
+    footer="_A triage aid, not a gate: the ratchets are the gate._",
+)
+
+
+def render_risk(report: RiskReport, style: Style) -> str:
+    lines = [style.title.format(score=report.score, level=risk_level(report.score)), "", *style.factor_header]
+    lines += [style.factor_row.format(**asdict(factor)) for factor in report.factors]
+    if report.slipped:
+        lines += ["", style.slipped, *(f"- {slip}" for slip in report.slipped)]
+    riskiest = report.review_first()
+    if riskiest:
+        lines += ["", style.review]
+        lines += [
+            f"- `{t.path}`: {t.lines} lines changed, hotspot {t.exposure:.2f}, "
+            f"+{t.complexity_added} CCN, worst function {t.worst_ccn}"
+            for t in riskiest
+        ]
+    lines += ["", style.footer]
+    return "\n".join(lines)
+
+
+def slipped_ratchets(baseline_path: Path, files: list[FileMetrics]) -> list[str]:
+    if not baseline_path.exists():
+        return []
+    return Snapshot.of(files).violations(load_baseline(baseline_path))
 
 
 def cmd_risk(args: argparse.Namespace) -> int:
     root = repo_root()
     merge_base = merge_base_of(args.base)
-    terrain = {f.path: f for f in survey(args.days, args.exclude)}
-    changes = changed_files(args.base)
-
-    source_lines = test_lines = 0
-    complexity_added = 0
-    worst_exposure = 0.0
-    top_hotspot = max((f.hotspot for f in terrain.values() if not f.test), default=0.0) or 1.0
-    areas = set()
-    touched = []
-    for path, added, deleted in changes:
-        if not analyzable(path, args.exclude):
-            continue
-        areas.add(path.split("/")[0])
-        if is_test(path):
-            test_lines += added + deleted
-            continue
-        source_lines += added + deleted
-        before = measure(path, source_at(merge_base, path) or "")
-        after_path = root / path
-        after = measure(path, after_path.read_text(encoding="utf-8", errors="replace")) if after_path.exists() else FileMetrics(path)
-        # Complexity only counts above CCN_NOTABLE, so a dozen new one-line functions don't read as risk.
-        delta = sum(
-            max(0, ccn - max(before.functions.get(name, 0), CCN_NOTABLE)) for name, ccn in after.functions.items()
-        )
-        complexity_added += delta
-        exposure = (terrain[path].hotspot / top_hotspot) if path in terrain else 0.0
-        worst_exposure = max(worst_exposure, exposure)
-        touched.append((path, added + deleted, exposure, delta, after.worst_ccn))
-
-    factors = risk_factors(source_lines, test_lines, complexity_added, worst_exposure, len(areas))
-    score = round(sum(weight * value for weight, value in factors.values()) * 100)
-    level = "high" if score >= RISK_HIGH else "medium" if score >= RISK_MEDIUM else "low"
-
-    baseline_path = root / args.baseline
-    slipped = []
-    if baseline_path.exists():
-        current = {"totals": summary(list(terrain.values())), "worst_ccn_by_file": worst_by_file(list(terrain.values()))}
-        slipped = ratchet_violations(load_baseline(baseline_path), current)
-
-    report = render_risk(score, level, factors, touched, slipped, args.markdown)
-    print(report)
+    files = survey(args.days, args.exclude)
+    top_hotspot = max((f.hotspot for f in production(files)), default=0.0) or 1.0
+    context = RiskContext(root, merge_base, {f.path: f for f in files}, top_hotspot)
+    change = measure_change(context, args.exclude)
+    report = RiskReport(risk_factors(change), change.touched, slipped_ratchets(root / args.baseline, files))
+    print(render_risk(report, MARKDOWN if args.markdown else TEXT))
     return 0
 
 
-def risk_factors(source_lines: int, test_lines: int, complexity_added: int, exposure: float, areas: int) -> dict:
-    # Each factor is squashed to 0..1. See reference/risk-model.md before changing them.
-    size = min(1.0, math.log10(1 + source_lines) / SIZE_LOG_DECADES)
-    untested = 0.0 if source_lines == 0 else max(0.0, 1 - test_lines / max(source_lines, 1))
-    complexity = min(1.0, complexity_added / COMPLEXITY_SATURATION)
-    hotspots = min(1.0, exposure)
-    spread = min(1.0, (areas - 1) / SPREAD_SATURATION) if areas else 0.0
-    values = {
-        "change size": size,
-        "hotspot exposure": hotspots,
-        "complexity added": complexity,
-        "missing test changes": untested,
-        "spread across top-level areas": spread,
-    }
-    return {name: (WEIGHTS[name], value) for name, value in values.items()}
+# --- command line ------------------------------------------------------------------------------------------
 
 
-def render_risk(score: int, level: str, factors: dict, touched: list, slipped: list[str], markdown: bool) -> str:
-    lines = [f"## Change risk: {score}/100 ({level})" if markdown else f"Change risk: {score}/100 ({level})", ""]
-    lines.append("| factor | weight | value |" if markdown else "factors:")
-    if markdown:
-        lines.append("| --- | --- | --- |")
-    for name, (weight, value) in factors.items():
-        lines.append(f"| {name} | {weight:.2f} | {value:.2f} |" if markdown else f"  {name:<32} weight {weight:.2f}  value {value:.2f}")
-    if slipped:
-        lines += ["", "**Ratchets slipped**" if markdown else "ratchets slipped:"]
-        lines += [f"- {s}" for s in slipped]
-    riskiest = sorted(touched, key=lambda t: (t[2], t[3]), reverse=True)[:REVIEW_FIRST_LIMIT]
-    if riskiest:
-        lines += ["", "**Review these first**" if markdown else "review these first:"]
-        for path, size, exposure, delta, worst in riskiest:
-            lines.append(f"- `{path}`: {size} lines changed, hotspot {exposure:.2f}, +{delta} CCN, worst function {worst}")
-    lines += ["", "_A triage aid, not a gate: the ratchets are the gate._" if markdown else "(triage aid, not a gate)"]
-    return "\n".join(lines)
-
-
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--days", type=int, default=DEFAULT_DAYS, help="churn window in days")
     parser.add_argument("--exclude", action="append", default=list(DEFAULT_EXCLUDES), help="glob to skip, repeatable")
-    parser.add_argument("--baseline", default=".lookout/ratchets.json")
+    parser.add_argument("--baseline", default=DEFAULT_BASELINE)
     commands = parser.add_subparsers(dest="command", required=True)
 
     survey_parser = commands.add_parser("survey", help="hotspots and totals for the current tree")
@@ -387,9 +509,13 @@ def main() -> int:
     risk_parser.add_argument("--base", default="origin/main")
     risk_parser.add_argument("--markdown", action="store_true", help="format for a pull request comment")
     risk_parser.set_defaults(run=cmd_risk)
+    return parser
 
-    args = parser.parse_args()
-    return args.run(args)
+
+def main() -> int:
+    args = build_parser().parse_args()
+    run: Callable[[argparse.Namespace], int] = args.run
+    return run(args)
 
 
 if __name__ == "__main__":

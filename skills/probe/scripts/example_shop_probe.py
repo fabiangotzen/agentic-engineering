@@ -110,27 +110,36 @@ def euros(cents: int) -> str:
 
 
 class ShopProbe(Harness):
+    rng: random.Random
+    shop: Shop
+    declines: int
+    expired: int
+    refusals: int
+
     def boot(self, args: list[str], seed: int) -> None:
         name = args[1] if len(args) >= 2 and args[0] == "catalog" else "default"
         if name not in CATALOGS:
             raise SystemExit(f"error: unknown catalog '{name}'. Catalogs: {', '.join(sorted(CATALOGS))}")
         prices, stock = CATALOGS[name]
         self.rng = random.Random(seed)
-        self.shop = Shop(FakeClock(), FakePaymentGateway(random.Random(seed * PAYMENT_SEED_OFFSET)), dict(prices), dict(stock))
+        payments = FakePaymentGateway(random.Random(seed * PAYMENT_SEED_OFFSET))
+        self.shop = Shop(FakeClock(), payments, dict(prices), dict(stock))
         self.declines = self.expired = self.refusals = 0
         self.emit(f"booted catalog '{name}' with seed {seed}")
 
     def view(self) -> str:
         shop = self.shop
-        lines = [f"== minute {shop.clock.now()} | orders {len(shop.orders)}"]
-        lines.append("PRODUCTS " + ", ".join(f"{sku} {euros(price)} ({shop.stock[sku]} left)" for sku, price in shop.prices.items()))
-        if shop.cart:
-            idle = shop.clock.now() - shop.cart_touched
-            lines.append("CART " + ", ".join(f"{qty}x {sku}" for sku, qty in shop.cart.items())
-                         + f" | total {euros(shop.total())} | expires in {max(0, CART_TTL_MINUTES - idle)} min [checkout]")
-        else:
-            lines.append("CART empty [add <sku> <qty>]")
-        return "\n".join(lines)
+        products = ", ".join(f"{sku} {euros(price)} ({shop.stock[sku]} left)" for sku, price in shop.prices.items())
+        header = f"== minute {shop.clock.now()} | orders {len(shop.orders)}"
+        return "\n".join([header, f"PRODUCTS {products}", self.cart_line()])
+
+    def cart_line(self) -> str:
+        shop = self.shop
+        if not shop.cart:
+            return "CART empty [add <sku> <qty>]"
+        items = ", ".join(f"{qty}x {sku}" for sku, qty in shop.cart.items())
+        expires = max(0, CART_TTL_MINUTES - (shop.clock.now() - shop.cart_touched))
+        return f"CART {items} | total {euros(shop.total())} | expires in {expires} min [checkout]"
 
     @verb("add", "<sku> [qty]")
     def add(self, args: list[str]) -> str:
@@ -139,7 +148,7 @@ class ShopProbe(Harness):
         try:
             quantity = int(args[1]) if len(args) > 1 else 1
         except ValueError:
-            raise Refused(f"quantity must be a whole number, got '{args[1]}'")
+            raise Refused(f"quantity must be a whole number, got '{args[1]}'") from None
         try:
             self.shop.add_to_cart(args[0], quantity)
         except ValueError as error:
@@ -154,7 +163,7 @@ class ShopProbe(Harness):
         try:
             result = self.shop.checkout()
         except ValueError as error:
-            raise Refused(str(error))
+            raise Refused(str(error)) from None
         self.shop.clock.minutes += CHECKOUT_MINUTES
         if result == "declined":
             self.declines += 1
@@ -171,14 +180,16 @@ class ShopProbe(Harness):
         try:
             self.shop.clock.minutes += int(args[0]) if args else 1
         except ValueError:
-            raise Refused(f"minutes must be a whole number, got '{args[0]}'")
+            raise Refused(f"minutes must be a whole number, got '{args[0]}'") from None
         return f"waited until minute {self.shop.clock.now()}"
 
     def bot_action(self) -> str | None:
         if len(self.shop.orders) >= BOT_MAX_ORDERS or self.shop.clock.now() > BOT_MAX_MINUTES:
             return None
         if self.shop.cart:
-            return "checkout" if self.rng.random() < BOT_CHECKOUT_CHANCE else f"wait {self.rng.randint(*BOT_WAIT_MINUTES)}"
+            if self.rng.random() < BOT_CHECKOUT_CHANCE:
+                return "checkout"
+            return f"wait {self.rng.randint(*BOT_WAIT_MINUTES)}"
         in_stock = [sku for sku, left in self.shop.stock.items() if left > 0]
         if not in_stock:
             return None

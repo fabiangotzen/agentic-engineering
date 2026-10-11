@@ -66,7 +66,8 @@ the contradiction list, and the draft frontmatter.
 9. Scripts:
    - For each script, state if the agent must RUN it or READ it.
    - Handle errors in the script and print clear error messages.
-   - Explain every constant in a comment.
+   - Explain each constant whose value is not obvious from its name: units, compatibility limits, or
+     surprising behaviour. Do not write a comment that only repeats the name.
    - List required packages and the install command.
 10. Use forward slashes in all paths. Use fully qualified MCP tool names
     (`Server:tool_name`), if the skill uses MCP tools.

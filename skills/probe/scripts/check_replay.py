@@ -32,50 +32,67 @@ TIMEOUT_SECONDS = 300
 DIFF_LINES = 40
 
 
+class UsageError(Exception):
+    """A bad command line or a missing file; reported with exit code 2."""
+
+
 def run(probe: list[str], command: str, session: Path) -> str:
     try:
         result = subprocess.run(
             [*probe, command, str(session)],
-            capture_output=True, text=True, timeout=TIMEOUT_SECONDS,
+            capture_output=True, text=True, timeout=TIMEOUT_SECONDS, check=False,
         )
     except subprocess.TimeoutExpired:
-        sys.exit(f"error: '{command}' did not finish within {TIMEOUT_SECONDS} seconds.")
+        raise UsageError(f"error: '{command}' did not finish within {TIMEOUT_SECONDS} seconds.") from None
+    except OSError as error:
+        raise UsageError(f"error: cannot start the probe command {probe}: {error}") from None
     if result.returncode != 0:
-        sys.exit(f"error: '{command}' failed with exit code {result.returncode}:\n{result.stderr.strip()}")
+        raise UsageError(f"error: '{command}' failed with exit code {result.returncode}:\n{result.stderr.strip()}")
     return result.stdout + result.stderr
 
 
-def main() -> int:
-    args = sys.argv[1:]
+def parse_args(args: list[str]) -> tuple[Path, list[str]]:
     if len(args) >= 3 and args[1] == "--":
-        session, probe = Path(args[0]), args[2:]
-    elif len(args) == 2:
-        script, session = Path(args[0]), Path(args[1])
-        if not script.is_file():
-            print(f"error: probe script '{script}' does not exist.")
-            return 2
-        probe = [sys.executable, str(script)]
-    else:
-        print(__doc__)
-        return 2
-    if not session.is_file():
-        print(f"error: session file '{session}' does not exist.")
-        return 2
+        return Path(args[0]), args[2:]
+    if len(args) != 2:
+        raise UsageError(__doc__ or "")
+    script = Path(args[0])
+    if not script.is_file():
+        raise UsageError(f"error: probe script '{script}' does not exist.")
+    return Path(args[1]), [sys.executable, str(script)]
 
+
+def compare(command: str, first: str, second: str) -> list[str]:
+    """The lines that explain a failure, or an empty list when the two replays pass."""
+    if REFUSED_ON_REPLAY in first:
+        refused = [line for line in first.splitlines() if REFUSED_ON_REPLAY in line]
+        return [f"FAIL: '{command}' refused a recorded action. The session no longer matches the build.", *refused]
+    if first != second:
+        diff = difflib.unified_diff(first.splitlines(), second.splitlines(), "replay 1", "replay 2", lineterm="")
+        return [f"FAIL: two replays of '{command}' differ. This session does not repeat.", *list(diff)[:DIFF_LINES]]
+    return []
+
+
+def check(session: Path, probe: list[str]) -> int:
+    if not session.is_file():
+        raise UsageError(f"error: session file '{session}' does not exist.")
     for command in REPLAY_COMMANDS:
-        first, second = run(probe, command, session), run(probe, command, session)
-        if REFUSED_ON_REPLAY in first:
-            print(f"FAIL: '{command}' refused a recorded action. The session no longer matches the build.")
-            print("\n".join(line for line in first.splitlines() if REFUSED_ON_REPLAY in line))
-            return 1
-        if first != second:
-            print(f"FAIL: two replays of '{command}' differ. This session does not repeat.")
-            diff = difflib.unified_diff(first.splitlines(), second.splitlines(), "replay 1", "replay 2", lineterm="")
-            print("\n".join(list(diff)[:DIFF_LINES]))
+        first = run(probe, command, session)
+        failure = compare(command, first, run(probe, command, session))
+        if failure:
+            print("\n".join(failure))
             return 1
         print(f"PASS: '{command}' is identical across two replays ({len(first.splitlines())} lines).")
     return 0
 
 
+def main(argv: list[str]) -> int:
+    try:
+        return check(*parse_args(argv[1:]))
+    except UsageError as error:
+        print(error)
+        return 2
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv))
