@@ -20,8 +20,9 @@ setup that are worth sharing. More on the approach: https://www.fabiangotzen.net
 | --- | --- |
 | [cartographer](skills/cartographer/SKILL.md) | Charts where code change and complexity meet (hotspots), keeps quality ratchets in CI, and gives each pull request a risk score with its factors. |
 | [probe](skills/probe/SKILL.md) | Builds a headless text tool that drives an application through its real entry points and saves each session as a replayable action log. |
+| [recall](skills/recall/SKILL.md) | Quizzes you on a codebase you own and its language, one question at a time, with code you write by hand and a journal of weak spots. |
 
-Requirements: cartographer needs git, Python 3 and `pip install lizard`. probe needs Python 3 only.
+Requirements: cartographer needs git, Python 3 and `pip install lizard`. probe and recall need Python 3 only.
 
 ### Prompts
 
