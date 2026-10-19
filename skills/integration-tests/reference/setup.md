@@ -14,7 +14,7 @@ This file describes how to start containers, connect them to the application, re
 - When tests run in parallel against one database, unique ids per test are required, not optional.
 - Put test-only helpers (data lookup, message publisher) in a test `@Service` that a `TestConfig` imports. Tests then stay free of repository code.
 - Use real containers, not mocks. Mock only in unit tests of pure domain logic.
-- For an external system that has no container (SAP, a partner REST API), stub it with WireMock at the HTTP level.
+- For an external system that has no container, stub it with WireMock at the HTTP level.
 - When a Mockito mock is the only option, add `// allow-mock: <reason>` on the same line. The checker then accepts it.
 - Inject a fixed `Clock` bean in the test configuration. Production code reads time from the `Clock`, never from `now()`.
 - Time that the database sets (`DEFAULT now()`, `CURRENT_TIMESTAMP`, `@CreationTimestamp`, JPA auditing) ignores the `Clock`. Do not assert on it, or give auditing a `DateTimeProvider` that reads the `Clock`.
