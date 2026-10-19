@@ -77,7 +77,7 @@ connects to the previous level.
 
 ## Step 3: Reviewer explanation
 
-Start when the user says they are ready, or after level 5.
+Start when the user says they are ready, or after level 6.
 
 1. Ask the user to explain the package to a reviewer in 5 to 8 sentences.
 2. List what is missing or wrong.
