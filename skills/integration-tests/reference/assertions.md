@@ -8,13 +8,16 @@ This file describes how to assert results and how to wait for asynchronous effec
 - Assert on stored state or on the HTTP response. Assert on log output only when the log is the behavior.
 - Assert lists in any order (`containsExactlyInAnyOrder`), because a query without `ORDER BY` has no fixed order.
 - Use `containsExactly` only when the query has `ORDER BY`, and add `// allow-order: <reason>` on that line.
+- Do not assert on size alone (`hasSize`, `size()`, `count()`). Assert on content, for example `extracting(Order::getId).containsExactlyInAnyOrder("order-1", "order-2")`.
+- A size assertion passes with the wrong elements, and it breaks when another test adds rows to the shared database.
 - Do not assert on ids or timestamps that the database generates. Sequence values depend on the tests that ran before.
 - Wait for asynchronous effects with Awaitility and a bounded `atMost`. Never use `Thread.sleep`.
 - To prove that nothing happens, wait for a fixed time with `during`, because a plain `await` passes at once:
 
 ```java
 await().during(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(3)).untilAsserted(() ->
-    assertThat(testData.findOrder("order-dup-1").getPayments()).hasSize(1));
+    assertThat(testData.findOrder("order-dup-1").getPayments())
+        .extracting(Payment::getId).containsExactlyInAnyOrder("pay-dup-1"));
 ```
 
 - For a Kafka consumer, publish through the test helper, then wait for the stored state:

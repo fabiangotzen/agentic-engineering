@@ -20,6 +20,8 @@ LINE_RULES = [
     ("mock", r"@(MockBean|MockitoBean|SpyBean|MockitoSpyBean|Mock)\b|Mockito\.mock\(",
      "use a real container or WireMock, or add // allow-mock: <reason>"),
     ("spring-boot-test", r"@SpringBootTest\b", "use the project's setup meta-annotation"),
+    ("size", r"\.hasSize\w*\(|\.(size|count)\(\)\)\.is",
+     "assert on content, for example extracting(Order::getId).containsExactlyInAnyOrder(...)"),
     ("order", r"\.containsExactly(ElementsOf)?\(",
      "assert in any order, or query with ORDER BY and add // allow-order: <reason>"),
 ]
