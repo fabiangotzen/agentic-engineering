@@ -1,112 +1,68 @@
 #!/usr/bin/env python3
-"""Check a package-mode overview against the rules in reference/package.md.
-
-    python <skill folder>/scripts/check_overview.py <answer file> [--src <package folder>]
-
-Checks the overview length, the number and format of the sequence diagrams, and the data flow line.
-With --src, also checks that each participant and method name in the diagrams, and each name in
-backticks in the overview, occurs in the source. Prints one line for each failure. Exits 0 when all
-checks pass, 1 when a check fails, and 2 on a usage or read error.
-
-Requires Python 3 and no other packages.
-"""
-
-from __future__ import annotations
+"""Usage: python check_overview.py <answer file> [--src <package folder>]"""
 
 import re
 import sys
 from pathlib import Path
 
-MAX_OVERVIEW_LINES = 10
-MAX_DIAGRAMS = 2
-MAX_PARTICIPANTS = 6
-# Lifelines that are not class names: the grouped static utilities and external systems in brackets.
-NOT_A_CLASS = re.compile(r"^(helpers|\[.+\])$")
-CODE_BLOCK = re.compile(r"```([^\n]*)\n(.*?)```", re.S)
-CALL_ARROW = re.compile(r"-{2,}\s*([A-Za-z_]\w*)\(")
-RETURN_ARROW = re.compile(r"<-( -)+")
-IDENTIFIER = re.compile(r"`([A-Za-z_][\w.]*)(?:\(\))?`")
-# Source files larger than this are skipped, so that a binary or generated file cannot slow the search.
-MAX_SOURCE_BYTES = 2_000_000
+BLOCK = re.compile(r"```([^\n]*)\n(.*?)```", re.S)
+CALL = re.compile(r"-{2,}\s*([A-Za-z_]\w*)\(")
+NAME = re.compile(r"`([A-Za-z_][\w.]*)(?:\(\))?`")
 
 
-def check_diagram(index: int, diagram: str) -> tuple[list[str], set[str]]:
-    failures: list[str] = []
-    lines = [line for line in diagram.splitlines() if line.strip()]
-    if not lines:
-        return [f"diagram {index} is empty"], set()
-    participants = re.split(r"\s{2,}", lines[0].strip())
-    if len(participants) > MAX_PARTICIPANTS:
-        failures.append(f"diagram {index} has {len(participants)} participants (max {MAX_PARTICIPANTS})")
-    calls = CALL_ARROW.findall(diagram)
-    if not calls:
-        failures.append(f"diagram {index} has no call arrow like ---method(args)--->")
-    if not RETURN_ARROW.search(diagram):
-        failures.append(f"diagram {index} has no dashed return arrow like <- - Type - -")
-    names = {name for name in participants if not NOT_A_CLASS.match(name)} | set(calls)
-    return failures, names
-
-
-def check_text(text: str) -> tuple[list[str], set[str]]:
-    failures: list[str] = []
-    blocks = CODE_BLOCK.findall(text)
-    if any("mermaid" in language.lower() for language, _ in blocks):
-        failures.append("found a Mermaid block; use plain ASCII")
-        blocks = [block for block in blocks if "mermaid" not in block[0].lower()]
-    if not 1 <= len(blocks) <= MAX_DIAGRAMS:
-        failures.append(f"found {len(blocks)} diagrams (need 1 to {MAX_DIAGRAMS})")
+def check(text):
+    errors, names = [], set()
+    blocks = BLOCK.findall(text)
+    if any("mermaid" in lang.lower() for lang, _ in blocks):
+        errors.append("found a Mermaid block; use plain ASCII")
+    diagrams = [body for lang, body in blocks if "mermaid" not in lang.lower()]
+    if not 1 <= len(diagrams) <= 2:
+        errors.append(f"found {len(diagrams)} diagrams (need 1 to 2)")
     overview = text.split("```", 1)[0]
-    overview_lines = [line for line in overview.splitlines() if line.strip()]
-    if len(overview_lines) > MAX_OVERVIEW_LINES:
-        failures.append(f"overview has {len(overview_lines)} lines (max {MAX_OVERVIEW_LINES})")
-    if not re.search(r"^Data flow:", CODE_BLOCK.sub("", text), re.M):
-        failures.append("no line starts with 'Data flow:'")
-    names = {part for name in IDENTIFIER.findall(overview) for part in name.split(".") if part}
-    for index, (_, diagram) in enumerate(blocks, start=1):
-        diagram_failures, diagram_names = check_diagram(index, diagram)
-        failures += diagram_failures
-        names |= diagram_names
-    return failures, names
+    if len([line for line in overview.splitlines() if line.strip()]) > 10:
+        errors.append("overview has more than 10 lines")
+    if not re.search(r"^Data flow:", BLOCK.sub("", text), re.M):
+        errors.append("no line starts with 'Data flow:'")
+    for name in NAME.findall(overview):
+        names.update(filter(None, name.split(".")))
+    for i, diagram in enumerate(diagrams, 1):
+        participants = re.split(r"\s{2,}", diagram.strip().splitlines()[0].strip()) if diagram.strip() else []
+        calls = CALL.findall(diagram)
+        if len(participants) > 6:
+            errors.append(f"diagram {i} has {len(participants)} participants (max 6)")
+        if not calls:
+            errors.append(f"diagram {i} has no call arrow like ---method(args)--->")
+        if not re.search(r"<-( -)+", diagram):
+            errors.append(f"diagram {i} has no dashed return arrow like <- - Type - -")
+        names.update(p for p in participants if p != "helpers" and not p.startswith("["))
+        names.update(calls)
+    return errors, names
 
 
-def missing_names(names: set[str], source: Path) -> list[str]:
-    remaining = set(names)
-    for path in source.rglob("*"):
-        if not remaining:
-            break
-        if not path.is_file() or ".git" in path.parts or path.stat().st_size > MAX_SOURCE_BYTES:
-            continue
-        content = path.read_text(encoding="utf-8", errors="ignore")
-        remaining -= {name for name in remaining if re.search(rf"\b{re.escape(name)}\b", content)}
-    return sorted(remaining)
+def missing(names, src):
+    text = "\n".join(
+        p.read_text(encoding="utf-8", errors="ignore")
+        for p in src.rglob("*")
+        if p.is_file() and ".git" not in p.parts
+    )
+    return sorted(n for n in names if not re.search(rf"\b{re.escape(n)}\b", text))
 
 
-def main(argv: list[str]) -> int:
-    args = argv[1:]
-    source = None
+def main(args):
+    src = None
     if "--src" in args:
-        position = args.index("--src")
-        if position + 1 >= len(args):
-            print(__doc__)
-            return 2
-        source = Path(args[position + 1])
-        del args[position : position + 2]
-    if len(args) != 1:
-        print(__doc__)
-        return 2
-    answer = Path(args[0])
-    if not answer.is_file():
-        print(f"error: answer file '{answer}' does not exist.")
-        return 2
-    if source is not None and not source.is_dir():
-        print(f"error: source folder '{source}' does not exist.")
-        return 2
-    failures, names = check_text(answer.read_text(encoding="utf-8"))
-    if source is not None:
-        failures += [f"'{name}' does not occur in {source}" for name in missing_names(names, source)]
-    print("\n".join(failures) if failures else "PASS: overview follows reference/package.md.")
-    return 1 if failures else 0
+        i = args.index("--src")
+        src, args = Path(args[i + 1]) if i + 1 < len(args) else None, args[:i] + args[i + 2:]
+        if src is None or not src.is_dir():
+            sys.exit(f"error: missing source folder\n{__doc__}")
+    if len(args) != 1 or not Path(args[0]).is_file():
+        sys.exit(__doc__)
+    errors, names = check(Path(args[0]).read_text(encoding="utf-8"))
+    if src:
+        errors += [f"'{n}' does not occur in {src}" for n in missing(names, src)]
+    print("\n".join(errors) or "PASS")
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(main(sys.argv[1:]))
