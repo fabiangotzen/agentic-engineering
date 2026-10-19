@@ -9,3 +9,13 @@ This file describes how to build test data that keeps the intent of a test visib
 - Do not use `Random`, `UUID.randomUUID()`, `Faker` or `now()`.
 - When you need many unique values, use a name-based generator, for example `UUID.nameUUIDFromBytes("order-cancel-1".getBytes())`.
 - Keep builders in the test source set. Share them across modules with Gradle `java-test-fixtures` or a Maven `test-jar`.
+
+## Generated data with Instancio
+
+- Use Instancio when a test needs full objects but cares about only a few fields.
+- Keep the fields with business meaning in a shared `Model`, and let Instancio fill the rest.
+- Give every test that uses Instancio its own seed with `@Seed(<number>)`, so that each test is reproducible and other tests do not change its data.
+- Use a different seed in each test of a class. The checker flags a missing or repeated seed.
+- Set ids yourself with a per-test prefix, because the same seed in two classes gives the same values.
+- Use `ignore(...)` for fields that the database or the framework manages, for example `version`.
+- Add `@ExtendWith(InstancioExtension.class)` to the class, so that `@Seed` takes effect and the seed shows in a failure.

@@ -23,7 +23,7 @@ They catch wiring and persistence bugs that mocks hide.
 
 1. Read the closest existing `*IT` class and the project test guide, for example `docs/TESTING.md`. Project rules win over this skill.
 2. Reuse the setup annotation of the project. Create one only if none exists.
-3. Build the test data with builders and fixed values.
+3. Build the test data with builders and fixed values, or with Instancio and a per-test seed.
 4. Write the tests with the rules below.
 5. Run the checker on the changed test files and fix every finding.
 6. Run the tests with the project command. Break the production behavior once, confirm that the test fails, then revert the break.
@@ -54,4 +54,4 @@ The script needs Python 3 and no other packages.
 
 - RUN `python <this skill's folder>/scripts/check_test_conventions.py <test files>` on Java and Kotlin test files.
   It prints `file:line: [rule] message` for each finding and exits with 0 when clean, 1 on findings and 2 on a usage error.
-- The checker passes on `assets/ExampleIT.java`. Run it on that file after you change the checker.
+- The checker passes on the examples in `assets/`. Run it on them after you change the checker.

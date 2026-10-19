@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 TEST = re.compile(r"^\s*@(Test|ParameterizedTest)\b")
+SEED = re.compile(r"@Seed\((\d+)L?\)")
 PHASE = re.compile(r"^\s*//\s*(arrange|act|assert)\b(?:\s*\+\s*(assert)\b)?", re.I)
 LINE_RULES = [
     ("random-data", r"\bnew Random\(|\bRandom\(\)|UUID\.randomUUID|\bFaker\b|\.now\(\)",
@@ -30,7 +31,7 @@ def method_body(lines, start):
     return body
 
 
-def check_test(lines, i):
+def check_test(lines, i, seeds):
     findings, j = [], i
     while j > 0 and lines[j - 1].strip().startswith("@"):
         j -= 1
@@ -39,8 +40,17 @@ def check_test(lines, i):
         k += 1
     if not any("@DisplayName" in line for line in lines[j:k + 1]):
         findings.append((i, "display-name", 'add @DisplayName("[AREA] expected behavior")'))
+    body = method_body(lines, k)
+    if seeds is not None and not any(".withSeed(" in line for line in body):
+        seed = SEED.search("\n".join(lines[j:k + 1]))
+        if not seed:
+            findings.append((i, "instancio-seed", "add a per-test @Seed(<number>) for Instancio data"))
+        elif seed.group(1) in seeds:
+            findings.append((i, "instancio-seed", f"seed {seed.group(1)} is used by another test; use a unique seed"))
+        else:
+            seeds.add(seed.group(1))
     phases = []
-    for line in method_body(lines, k):
+    for line in body:
         match = PHASE.match(line)
         if match:
             phases += [p.lower() for p in match.groups() if p]
@@ -61,8 +71,9 @@ def check_file(path):
         for rule, pattern, message in LINE_RULES:
             if re.search(pattern, line) and not (rule == "mock" and "allow-mock" in line):
                 findings.append((i, rule, message))
+    seeds = set() if any("Instancio." in line for line in lines) else None
     for i in tests:
-        findings += check_test(lines, i)
+        findings += check_test(lines, i, seeds)
     return [f"{path}:{i + 1}: [{rule}] {message}" for i, rule, message in sorted(findings)]
 
 
