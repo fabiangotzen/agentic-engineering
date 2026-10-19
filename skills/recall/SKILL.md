@@ -1,6 +1,6 @@
 ---
 name: recall
-description: Quizzes the user about a codebase they own and the programming language it uses, one question at a time, with active recall and code that the user writes by hand. Use when the user types /recall, asks to be quizzed or tested, or wants to learn or understand their codebase or its language better; an optional argument names a topic ("/recall the request pipeline") or "review" to revisit weak spots.
+description: Quizzes the user about a codebase they own and the programming language it uses, one question at a time, with active recall and code that the user writes by hand. Use when the user types /recall, asks to be quizzed or tested, or wants to learn or understand their codebase or its language better; an optional argument names a topic ("/recall the request pipeline"), "review" to revisit weak spots, or "package <path>" for an overview with sequence diagrams and a quiz in six levels.
 ---
 
 # Recall
@@ -23,7 +23,7 @@ language by building this project. The goal is durable understanding of code tha
 
 1. Read the learner profile and the journal. The journal is `.recall/journal.md` in the root of the repository, one for
    each project.
-2. Pick a topic. Use the argument if the user gives one. For `review`, run the journal script from the project root and
+2. Pick a topic. For `package <path>`, follow package mode instead of steps 3 to 5. Use the argument if the user gives one. For `review`, run the journal script from the project root and
    build the session from its output. Otherwise, use the first source that has a topic:
     - Code that changed in this session or in recent commits (`git log --oneline -10`, `git diff`). Quiz on it while it
       is fresh.
@@ -47,6 +47,7 @@ language by building this project. The goal is durable understanding of code tha
 ## Reference files
 
 - Before you write the questions for a session, read [reference/questions.md](reference/questions.md).
+- For `package <path>`, read [reference/package.md](reference/package.md) and follow its three steps.
 - Before you create the journal or write an entry, read [reference/journal.md](reference/journal.md).
 
 ## Scripts
@@ -55,3 +56,5 @@ All scripts need Python 3 and no other packages.
 
 - RUN `python <this skill's folder>/scripts/journal.py review` from the project root. It reads `.recall/journal.md`,
   prints the open misses and revisit items, oldest first, and leaves out items marked as recovered.
+- RUN `python <this skill's folder>/scripts/check_overview.py <answer file> --src <package folder>` in package mode
+  before you show the overview. It checks the diagram rules and that every class and method name exists in the code.
