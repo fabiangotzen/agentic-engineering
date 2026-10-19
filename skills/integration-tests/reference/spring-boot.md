@@ -2,6 +2,15 @@
 
 This file gives the Spring Boot skeleton for the rules in the setup reference: meta-annotation, container holder, cleanup and test helpers.
 
+## Contents
+
+- Meta-annotation
+- Containers, once per JVM
+- Cleanup
+- Test helpers and clock
+- Random method order
+- Build
+
 ## Meta-annotation
 
 ```java
@@ -21,7 +30,7 @@ public @interface DatabaseIntegrationTest {
 
 ```java
 public final class Containers {
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16.4-alpine");
     static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:3.8.0");
 
     static {
@@ -35,12 +44,15 @@ public final class Containers {
                     "spring.datasource.url=" + POSTGRES.getJdbcUrl(),
                     "spring.datasource.username=" + POSTGRES.getUsername(),
                     "spring.datasource.password=" + POSTGRES.getPassword(),
-                    "spring.kafka.bootstrap-servers=" + KAFKA.getBootstrapServers())
+                    "spring.kafka.bootstrap-servers=" + KAFKA.getBootstrapServers(),
+                    "spring.kafka.consumer.group-id=it-" + System.identityHashCode(context))
                 .applyTo(context);
         }
     }
 }
 ```
+
+The consumer group id is unique per application context, so that cached contexts do not share messages.
 
 With Spring Boot 3.1 or later, `@ServiceConnection` on static container beans in a `@TestConfiguration` can replace the initializer.
 
@@ -82,6 +94,14 @@ public class TestDataService {
     public Order findOrder(String id) { return orders.findById(id).orElseThrow(); }
     public void publish(Object event) { kafka.send("payments", event).join(); }
 }
+```
+
+## Random method order
+
+Put this in `src/test/resources/junit-platform.properties` for one run, to find tests that depend on each other:
+
+```
+junit.jupiter.testmethod.order.default=org.junit.jupiter.api.MethodOrderer$Random
 ```
 
 ## Build

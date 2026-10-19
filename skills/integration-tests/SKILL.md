@@ -19,6 +19,7 @@ They catch wiring and persistence bugs that mocks hide.
 - [ ] 4. Write the tests
 - [ ] 5. Run the checker
 - [ ] 6. Run the tests and break the code once
+- [ ] 7. Prove that the tests are deterministic
 ```
 
 1. Read the closest existing `*IT` class and the project test guide, for example `docs/TESTING.md`. Project rules win over this skill.
@@ -27,6 +28,9 @@ They catch wiring and persistence bugs that mocks hide.
 4. Write the tests with the rules below.
 5. Run the checker on the changed test files and fix every finding.
 6. Run the tests with the project command. Break the production behavior once, confirm that the test fails, then revert the break.
+7. Run the changed test classes 3 times. Run them once in random method order with
+   `junit.jupiter.testmethod.order.default=org.junit.jupiter.api.MethodOrderer$Random` in `junit-platform.properties`.
+   Fix every test that fails in only some runs before you finish.
 
 ## Test structure
 
@@ -43,7 +47,7 @@ They catch wiring and persistence bugs that mocks hide.
 
 - Before you create or change the setup (containers, annotations, cleanup, helpers), read [reference/setup.md](reference/setup.md).
 - Before you write test data, read [reference/test-data.md](reference/test-data.md).
-- Before you write assertions or wait for async effects (Kafka, events), read [reference/assertions.md](reference/assertions.md).
+- Before you write assertions, assert on lists, or wait for async effects (Kafka, events), read [reference/assertions.md](reference/assertions.md).
 - When the project uses Spring Boot, read [reference/spring-boot.md](reference/spring-boot.md) and copy [assets/ExampleIT.java](assets/ExampleIT.java) as the start point.
 - When the project uses .NET, Python, Node or Go, read [reference/other-frameworks.md](reference/other-frameworks.md).
 - When a rule seems wrong for the project, read [reference/sources.md](reference/sources.md) for the reason behind it.
@@ -54,4 +58,5 @@ The script needs Python 3 and no other packages.
 
 - RUN `python <this skill's folder>/scripts/check_test_conventions.py <test files>` on Java and Kotlin test files.
   It prints `file:line: [rule] message` for each finding and exits with 0 when clean, 1 on findings and 2 on a usage error.
+- To accept one finding on purpose, add `// allow-<rule>: <reason>` on the same line, for example `// allow-order: ORDER BY id`.
 - The checker passes on the examples in `assets/`. Run it on them after you change the checker.
